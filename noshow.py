@@ -45,7 +45,7 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out["dow"] = out["date"].dt.dayofweek
     out["hour"] = out["dep_time"].str[:2].astype(int)
     rate = out[TARGET] / out["booked"]
-    out["prev_rate"] = rate.groupby(out["flight_number"]).shift(-1)
+    out["prev_rate"] = rate.groupby(out["flight_number"]).shift(1)
     return out
 
 

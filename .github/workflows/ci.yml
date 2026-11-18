@@ -1,0 +1,32 @@
+name: CI
+
+# TRIGGERS: when should this pipeline run?
+on:
+  pull_request:          # every time a PR is opened or updated
+  push:
+    branches: [main]     # every time something lands on main
+
+jobs:
+  # JOB 1: fast checks on the runner itself (seconds)
+  lint:
+    runs-on: ubuntu-latest           # rent a fresh Ubuntu VM
+    steps:
+      - uses: actions/checkout@v4    # copy the repo onto the VM
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff==0.6.9
+      - run: ruff check .            # fail the job if the linter finds problems
+
+  # JOB 2: build the image and run the tests INSIDE it
+  test:
+    needs: lint                      # only start if lint passed (fail fast)
+    runs-on: ubuntu-latest           # a separate fresh VM (Docker is preinstalled)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image (tagged with the commit ID)
+        run: docker build -t noshow:${{ github.sha }} .
+      - name: Run the tests inside the image
+        run: docker run --rm noshow:${{ github.sha }} pytest -q
+      - name: Smoke test - does the image start?
+        run: docker run --rm noshow:${{ github.sha }}

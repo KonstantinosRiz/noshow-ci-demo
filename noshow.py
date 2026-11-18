@@ -1,6 +1,7 @@
 """No-show feature pipeline (trimmed version of last night's module, for the CI demo)."""
 
 import logging
+import os
 
 import pandas as pd
 

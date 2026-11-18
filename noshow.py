@@ -6,7 +6,14 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_COLUMNS = ("date", "flight_number", "destination", "dep_time", "booked", "no_shows")
+REQUIRED_COLUMNS = (
+    "date",
+    "flight_number",
+    "destination",
+    "dep_time",
+    "booked",
+    "no_shows",
+)
 TARGET = "no_shows"
 
 

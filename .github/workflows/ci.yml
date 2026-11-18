@@ -1,32 +1,70 @@
-name: CI
+name: CI/CD
 
-# TRIGGERS: when should this pipeline run?
+# TRIGGERS: same as before
 on:
-  pull_request:          # every time a PR is opened or updated
+  pull_request:          # PRs: only lint + test run (the CD jobs are skipped)
   push:
-    branches: [main]     # every time something lands on main
+    branches: [main]     # main: lint + test + push image + deploy staging + deploy production
+
+# A variable every job can use: the image's full name in GitHub's registry (must be lowercase)
+env:
+  IMAGE: ghcr.io/konstantinosriz/noshow-ci-demo
 
 jobs:
-  # JOB 1: fast checks on the runner itself (seconds)
+  # ---------------------------------------------------------------- CI
   lint:
-    runs-on: ubuntu-latest           # rent a fresh Ubuntu VM
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4    # copy the repo onto the VM
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install ruff==0.6.9
-      - run: ruff check .            # fail the job if the linter finds problems
+      - run: ruff check .
 
-  # JOB 2: build the image and run the tests INSIDE it
   test:
-    needs: lint                      # only start if lint passed (fail fast)
-    runs-on: ubuntu-latest           # a separate fresh VM (Docker is preinstalled)
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write                # allowed to push images to GitHub's registry
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image (tagged with the commit ID)
-        run: docker build -t noshow:${{ github.sha }} .
+        run: docker build -t $IMAGE:${{ github.sha }} .
       - name: Run the tests inside the image
-        run: docker run --rm noshow:${{ github.sha }} pytest -q
+        run: docker run --rm $IMAGE:${{ github.sha }} pytest -q
       - name: Smoke test - does the image start?
-        run: docker run --rm noshow:${{ github.sha }}
+        run: docker run --rm $IMAGE:${{ github.sha }}
+
+      # ------------------------------------------------------------ CD starts here (main only)
+      - name: Log in to the registry
+        if: github.ref == 'refs/heads/main'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push the SAME tested image to the registry (build once, deploy many)
+        if: github.ref == 'refs/heads/main'
+        run: docker push $IMAGE:${{ github.sha }}
+
+  deploy-staging:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest             # a brand-new machine that has never seen our code
+    environment: staging
+    permissions:
+      packages: read
+    steps:
+      - name: Log in to the registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: "Deploy (simulated): pull the exact tested image from the registry"
+        run: docker pull $IMAGE:${{ github.sha }}
+      - name: Smoke test in staging
+        run: docker run --rm $IMAGE:${{ github.sha }}
+
+  deploy-production:
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production            # waits here until a required reviewer approves
+    steps:
+      - name: "Deploy (simulated)"
+        run: echo "Deploying $IMAGE:${{ github.sha }} to production"

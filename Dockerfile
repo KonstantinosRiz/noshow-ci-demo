@@ -1,6 +1,8 @@
 # Start from a small Linux image that already has Python 3.11
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.source=https://github.com/KonstantinosRiz/noshow-ci-demo
+
 # Work inside /app in the image
 WORKDIR /app
 
